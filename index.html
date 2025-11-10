@@ -8,7 +8,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
-        /* كل الأنماط السابقة موجودة هنا */
         :root {
             --primary: #4361ee;
             --primary-light: #4895ef;
@@ -731,6 +730,44 @@
             font-size: 0.85rem;
             color: var(--gray);
         }
+
+        .current-question {
+            background: linear-gradient(135deg, #f0f4ff 0%, #e6eeff 100%);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-bottom: 20px;
+            border-right: 4px solid var(--primary);
+        }
+
+        .question-text {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--secondary);
+            margin-bottom: 10px;
+        }
+
+        .question-round {
+            font-size: 0.9rem;
+            color: var(--gray);
+            font-weight: 500;
+        }
+
+        .advanced-controls {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--gray-light);
+        }
+
+        .control-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .question-input {
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
@@ -777,6 +814,10 @@
                             <div class="stat-number" id="votesCount">0</div>
                             <div class="stat-label">تصويت</div>
                         </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="roundsCount">0</div>
+                            <div class="stat-label">جولة</div>
+                        </div>
                     </div>
                     
                     <div class="room-info">
@@ -807,6 +848,12 @@
                         <button id="addItemBtn" class="small">إضافة</button>
                     </div>
                     
+                    <label>➕ إضافة سؤال جديد</label>
+                    <div class="form-row">
+                        <input type="text" id="newQuestion" placeholder="أدخل السؤال">
+                        <button id="addQuestionBtn" class="small">إضافة</button>
+                    </div>
+                    
                     <label>⏰ مدة التصويت (بالثواني)</label>
                     <input type="number" id="voteDuration" min="10" value="30">
                     
@@ -815,8 +862,21 @@
                         <button id="endVoteBtn" class="danger" style="display: none;">⏹️ إنهاء التصويت</button>
                     </div>
                     
+                    <div class="advanced-controls">
+                        <h3>⚙️ تحكمات متقدمة</h3>
+                        <div class="control-buttons">
+                            <button id="skipRoundBtn" class="secondary small">⏭️ تخطي الجولة</button>
+                            <button id="resetQuestionsBtn" class="secondary small">🔄 إعادة الأسئلة</button>
+                            <button id="restartRoundBtn" class="secondary small">🔄 إعادة الجولة</button>
+                            <button id="resetGameBtn" class="danger small">🗑️ إعادة اللعبة</button>
+                        </div>
+                    </div>
+                    
                     <h3>📝 العناصر المضافة</h3>
                     <div class="item-list" id="itemsList"></div>
+                    
+                    <h3>❓ الأسئلة المضافة</h3>
+                    <div class="item-list" id="questionsList"></div>
                 </div>
             </div>
             
@@ -833,6 +893,7 @@
                             <li>لعب جماعي مع الأصدقاء</li>
                             <li>تصويت تفاعلي في الوقت الحقيقي</li>
                             <li>نتائج فورية مع ترتيب العناصر</li>
+                            <li>أسئلة تفاعلية لكل جولة</li>
                             <li>واجهة جميلة وسهلة الاستخدام</li>
                         </ul>
                     </div>
@@ -841,7 +902,7 @@
                     <ol style="text-align: right; max-width: 400px; margin: 0 auto;">
                         <li>أدخل اسم الغرفة واسمك</li>
                         <li>انقر على "إنشاء غرفة جديدة" أو "الانضمام للغرفة"</li>
-                        <li>إذا كنت المضيف، أضف عناصر للتصويت</li>
+                        <li>إذا كنت المضيف، أضف عناصر وأسئلة للتصويت</li>
                         <li>ابدأ جولة التصويت وشارك في الاختيار!</li>
                     </ol>
                 </div>
@@ -857,6 +918,12 @@
                         
                         <!-- محتوى التبويب: منطقة التصويت -->
                         <div class="tab-content active" id="voting-tab">
+                            <!-- السؤال الحالي -->
+                            <div class="current-question" id="currentQuestionContainer" style="display: none;">
+                                <div class="question-round" id="questionRound">الجولة 1</div>
+                                <div class="question-text" id="questionText">ما هو أفضل عنصر في رأيك؟</div>
+                            </div>
+                            
                             <div class="card">
                                 <div class="section-title">
                                     <span class="section-title-icon">🗳️</span>
@@ -912,12 +979,46 @@
         <div class="notification-content" id="notificationContent"></div>
     </div>
 
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
     <script>
+        // إعدادات Firebase
+        const firebaseConfig = {
+            // ضع إعدادات Firebase الخاصة بك هنا
+            // apiKey: "...",
+            // authDomain: "...",
+            // databaseURL: "...",
+            // projectId: "...",
+            // storageBucket: "...",
+            // messagingSenderId: "...",
+            // appId: "..."
+        };
+
+        let useFirebase = Object.keys(firebaseConfig).length > 0;
+
+        if(useFirebase){
+            firebase.initializeApp(firebaseConfig);
+            var db = firebase.database();
+        } else {
+            console.log('✅ الوضع المحلي مفعل - يمكنك اللعب بمفردك أو مع الآخرين على نفس الجهاز');
+        }
+
         // حالة اللعبة
         let roomId = null;
         let playerName = null;
         let isHost = false;
-        let localState = { players: {}, items: {}, votes: {}, voting: false, endsAt: null };
+        let localState = { 
+            players: {}, 
+            items: {}, 
+            votes: {}, 
+            questions: {},
+            currentQuestion: null,
+            currentRound: 0,
+            voting: false, 
+            endsAt: null 
+        };
         let maxPlayers = 8;
         let voteLimit = 3;
         let localTimerInterval = null;
@@ -931,14 +1032,22 @@
         const playerCountEl = document.getElementById('playerCount');
         const itemsCountEl = document.getElementById('itemsCount');
         const votesCountEl = document.getElementById('votesCount');
+        const roundsCountEl = document.getElementById('roundsCount');
         const hostNote = document.getElementById('hostNote');
         const hostControls = document.getElementById('hostControls');
         const newItemInput = document.getElementById('newItem');
         const addItemBtn = document.getElementById('addItemBtn');
+        const newQuestionInput = document.getElementById('newQuestion');
+        const addQuestionBtn = document.getElementById('addQuestionBtn');
         const itemsList = document.getElementById('itemsList');
+        const questionsList = document.getElementById('questionsList');
         const voteGrid = document.getElementById('voteGrid');
         const startVoteBtn = document.getElementById('startVoteBtn');
         const endVoteBtn = document.getElementById('endVoteBtn');
+        const skipRoundBtn = document.getElementById('skipRoundBtn');
+        const resetQuestionsBtn = document.getElementById('resetQuestionsBtn');
+        const restartRoundBtn = document.getElementById('restartRoundBtn');
+        const resetGameBtn = document.getElementById('resetGameBtn');
         const voteStatus = document.getElementById('voteStatus');
         const timeLeft = document.getElementById('timeLeft');
         const progressBar = document.getElementById('progressBar');
@@ -953,6 +1062,9 @@
         const notificationContent = document.getElementById('notificationContent');
         const welcomeMessage = document.getElementById('welcomeMessage');
         const gameArea = document.getElementById('gameArea');
+        const currentQuestionContainer = document.getElementById('currentQuestionContainer');
+        const questionRound = document.getElementById('questionRound');
+        const questionText = document.getElementById('questionText');
         
         // التبويبات
         const tabs = document.querySelectorAll('.tab');
@@ -1033,24 +1145,98 @@
             welcomeMessage.style.display = 'none';
             gameArea.style.display = 'block';
             
-            if(asHost){
-                localState = { players: {}, items: {}, votes: {}, voting:false, endsAt:null };
-                localState.items = {
-                    "فكرة رائعة": {text: "فكرة رائعة"},
-                    "مشروع مميز": {text: "مشروع مميز"}, 
-                    "تصميم مبتكر": {text: "تصميم مبتكر"}
-                };
+            if(!useFirebase){
+                // الوضع المحلي
+                if(asHost){
+                    localState = { 
+                        players: {}, 
+                        items: {}, 
+                        votes: {}, 
+                        questions: {},
+                        currentQuestion: null,
+                        currentRound: 0,
+                        voting: false, 
+                        endsAt: null 
+                    };
+                    // إضافة عناصر وأسئلة افتراضية
+                    localState.items = {
+                        "فكرة رائعة": {text: "فكرة رائعة"},
+                        "مشروع مميز": {text: "مشروع مميز"}, 
+                        "تصميم مبتكر": {text: "تصميم مبتكر"}
+                    };
+                    localState.questions = {
+                        "ما هو أفضل عنصر في رأيك؟": {text: "ما هو أفضل عنصر في رأيك؟"},
+                        "أي عنصر تفضل؟": {text: "أي عنصر تفضل؟"},
+                        "ما هو اختيارك المفضل؟": {text: "ما هو اختيارك المفضل؟"}
+                    };
+                    writeLocal();
+                }
+                joinAsPlayerLocal();
+                renderLocal();
+                return;
             }
-            joinAsPlayer();
-            renderGame();
+
+            // وضع Firebase
+            const roomRef = ref('rooms/' + roomId);
+
+            if(asHost){
+                roomRef.once('value').then(snap=>{
+                    if(!snap.exists()){
+                        roomRef.set({ 
+                            players: {}, 
+                            items: {}, 
+                            votes: {}, 
+                            questions: {},
+                            currentQuestion: null,
+                            currentRound: 0,
+                            voting: false, 
+                            endsAt: null 
+                        });
+                    }
+                    joinAsPlayerFirebase(roomRef, true);
+                });
+            } else {
+                joinAsPlayerFirebase(roomRef, false);
+            }
+
+            roomRef.on('value', snap=>{
+                const val = snap.val();
+                if(!val) return;
+                localState = val;
+                renderFirebase();
+            });
         }
 
-        function joinAsPlayer(){ 
+        // مساعدات الوضع المحلي
+        function writeLocal(){ window._localGame = localState; }
+        function readLocal(){ localState = window._localGame || localState; }
+        function joinAsPlayerLocal(){ 
+            readLocal(); 
             if(Object.keys(localState.players).length >= maxPlayers){ 
                 showNotification('❌ الغرفة ممتلئة (الحد الأقصى 8 لاعبين)', 'error'); 
                 return; 
             } 
             localState.players[playerName] = { name: playerName, joinedAt: Date.now(), isHost:isHost }; 
+            writeLocal(); 
+        }
+
+        // Firebase
+        function ref(path){
+            return useFirebase ? db.ref(path) : null;
+        }
+
+        function encodeKey(k){ 
+            return k.replace(/\./g,'-dot-')
+                   .replace(/#/g,'-hash-')
+                   .replace(/\$/g,'-dollar-')
+                   .replace(/\[/g,'-lbr-')
+                   .replace(/\]/g,'-rbr-'); 
+        }
+
+        function joinAsPlayerFirebase(roomRef, asHostFlag){
+            const playerRef = ref('rooms/' + roomId + '/players/' + encodeKey(playerName));
+            playerRef.set({ name: playerName, joinedAt: Date.now(), isHost: asHostFlag });
+            playerRef.onDisconnect().remove();
         }
 
         // إضافة عنصر
@@ -1061,10 +1247,36 @@
                 return;
             }
             
-            localState.items[text] = { text }; 
+            if(useFirebase){ 
+                ref('rooms/'+roomId+'/items/'+encodeKey(text)).set({ text }); 
+            } else { 
+                readLocal(); 
+                localState.items[text] = { text }; 
+                writeLocal(); 
+                renderLocal(); 
+            }
             newItemInput.value='';
-            renderGame();
             showNotification('✅ تم إضافة العنصر بنجاح', 'success');
+        });
+
+        // إضافة سؤال
+        addQuestionBtn.addEventListener('click', ()=>{
+            const text = newQuestionInput.value.trim(); 
+            if(!text) {
+                showNotification('يرجى إدخال نص السؤال', 'error');
+                return;
+            }
+            
+            if(useFirebase){ 
+                ref('rooms/'+roomId+'/questions/'+encodeKey(text)).set({ text }); 
+            } else { 
+                readLocal(); 
+                localState.questions[text] = { text }; 
+                writeLocal(); 
+                renderLocal(); 
+            }
+            newQuestionInput.value='';
+            showNotification('✅ تم إضافة السؤال بنجاح', 'success');
         });
 
         // بدء التصويت
@@ -1076,12 +1288,29 @@
             }
             
             const dur = parseInt(voteDurationInput.value) || 30;
-            localState.voting = true; 
-            localState.endsAt = Date.now() + dur * 1000; 
-            localState.votes = {}; 
-            renderGame(); 
-            startTimer(); 
             
+            // اختيار سؤال عشوائي
+            let randomQuestion = getRandomQuestion();
+            
+            if(useFirebase){
+                ref('rooms/'+roomId).update({ 
+                    voting: true, 
+                    endsAt: Date.now() + dur * 1000, 
+                    votes: {},
+                    currentQuestion: randomQuestion,
+                    currentRound: (localState.currentRound || 0) + 1
+                });
+            } else {
+                readLocal(); 
+                localState.voting = true; 
+                localState.endsAt = Date.now() + dur * 1000; 
+                localState.votes = {}; 
+                localState.currentQuestion = randomQuestion;
+                localState.currentRound = (localState.currentRound || 0) + 1;
+                writeLocal(); 
+                renderLocal(); 
+                startLocalTimer(); 
+            }
             startVoteBtn.style.display = 'none';
             endVoteBtn.style.display = 'block';
             showNotification('🚀 بدأ التصويت! يمكن للاعبين التصويت الآن', 'success');
@@ -1089,23 +1318,134 @@
 
         // إنهاء التصويت
         endVoteBtn.addEventListener('click', ()=>{
-            localState.voting = false; 
-            renderGame(); 
-            
+            if(useFirebase){
+                ref('rooms/'+roomId).update({ voting: false });
+            } else {
+                readLocal(); 
+                localState.voting = false; 
+                writeLocal(); 
+                renderLocal(); 
+            }
             startVoteBtn.style.display = 'block';
             endVoteBtn.style.display = 'none';
             showNotification('⏹️ تم إنهاء التصويت', 'success');
         });
 
+        // تخطي الجولة
+        skipRoundBtn.addEventListener('click', ()=>{
+            if(useFirebase){
+                ref('rooms/'+roomId).update({ 
+                    voting: false,
+                    currentRound: (localState.currentRound || 0) + 1
+                });
+            } else {
+                readLocal(); 
+                localState.voting = false; 
+                localState.currentRound = (localState.currentRound || 0) + 1;
+                writeLocal(); 
+                renderLocal(); 
+            }
+            showNotification('⏭️ تم تخطي الجولة', 'warning');
+        });
+
+        // إعادة الأسئلة
+        resetQuestionsBtn.addEventListener('click', ()=>{
+            if(useFirebase){
+                ref('rooms/'+roomId+'/questions').set({});
+            } else {
+                readLocal(); 
+                localState.questions = {}; 
+                writeLocal(); 
+                renderLocal(); 
+            }
+            showNotification('🔄 تم إعادة تعيين الأسئلة', 'success');
+        });
+
+        // إعادة الجولة
+        restartRoundBtn.addEventListener('click', ()=>{
+            if(useFirebase){
+                ref('rooms/'+roomId).update({ 
+                    voting: false,
+                    votes: {}
+                });
+            } else {
+                readLocal(); 
+                localState.voting = false; 
+                localState.votes = {}; 
+                writeLocal(); 
+                renderLocal(); 
+            }
+            showNotification('🔄 تم إعادة الجولة', 'success');
+        });
+
+        // إعادة اللعبة
+        resetGameBtn.addEventListener('click', ()=>{
+            if(confirm('هل أنت متأكد من إعادة تعيين اللعبة؟ سيتم حذف جميع البيانات الحالية.')){
+                if(useFirebase){
+                    ref('rooms/'+roomId).set({ 
+                        players: localState.players,
+                        items: {},
+                        votes: {},
+                        questions: {},
+                        currentQuestion: null,
+                        currentRound: 0,
+                        voting: false,
+                        endsAt: null
+                    });
+                } else {
+                    readLocal(); 
+                    localState.items = {}; 
+                    localState.votes = {}; 
+                    localState.questions = {}; 
+                    localState.currentQuestion = null;
+                    localState.currentRound = 0;
+                    localState.voting = false;
+                    localState.endsAt = null;
+                    writeLocal(); 
+                    renderLocal(); 
+                }
+                showNotification('🗑️ تم إعادة تعيين اللعبة', 'success');
+            }
+        });
+
+        // الحصول على سؤال عشوائي
+        function getRandomQuestion() {
+            const questions = localState.questions || {};
+            const questionKeys = Object.keys(questions);
+            
+            if (questionKeys.length === 0) {
+                return "ما هو أفضل عنصر في رأيك؟"; // سؤال افتراضي
+            }
+            
+            const randomIndex = Math.floor(Math.random() * questionKeys.length);
+            return questions[questionKeys[randomIndex]].text;
+        }
+
         // Renderers
-        function renderGame(){
+        function renderFirebase(){
             renderPlayers();
             renderItems();
+            renderQuestions();
             renderVoteArea();
             updateVoteStatus();
+            updateCurrentQuestion();
             
             if(!localState.voting && localState.endsAt){ 
                 computeAndShowResults(localState.votes || {});
+            }
+        }
+
+        function renderLocal(){
+            readLocal();
+            renderPlayers();
+            renderItems(); 
+            renderQuestions();
+            renderVoteArea(); 
+            updateVoteStatus();
+            updateCurrentQuestion();
+            
+            if(!localState.voting && localState.endsAt){ 
+                computeAndShowResults(localState.votes || {}); 
             }
         }
         
@@ -1134,12 +1474,24 @@
             voteStatus.style.color = localState.voting ? 'var(--success)' : 'var(--gray)';
             
             if(localState.voting && localState.endsAt){ 
-                startTimer(); 
+                startTimer(localState.endsAt); 
             } else { 
                 stopTimer(); 
                 timeLeft.textContent='0';
                 progressBar.style.width = '0%';
                 timeLeft.className = 'timer';
+            }
+        }
+
+        function updateCurrentQuestion() {
+            roundsCountEl.textContent = localState.currentRound || 0;
+            
+            if (localState.currentQuestion && localState.voting) {
+                currentQuestionContainer.style.display = 'block';
+                questionRound.textContent = `الجولة ${localState.currentRound || 1}`;
+                questionText.textContent = localState.currentQuestion;
+            } else {
+                currentQuestionContainer.style.display = 'none';
             }
         }
 
@@ -1174,8 +1526,13 @@
                     remove.textContent='حذف'; 
                     remove.className = 'small danger';
                     remove.addEventListener('click', ()=>{ 
-                        delete localState.items[k]; 
-                        renderGame(); 
+                        if(useFirebase){ 
+                            ref('rooms/'+roomId+'/items/'+encodeKey(k)).remove(); 
+                        } else { 
+                            delete localState.items[k]; 
+                            writeLocal(); 
+                            renderLocal(); 
+                        }
                         showNotification('🗑️ تم حذف العنصر', 'success');
                     }); 
                     
@@ -1190,6 +1547,61 @@
                     div.className='item'; 
                     div.textContent = it.text; 
                     itemsList.appendChild(div); 
+                });
+            }
+        }
+
+        function renderQuestions(){
+            questionsList.innerHTML='';
+            const questions = localState.questions || {};
+            
+            if(Object.keys(questions).length === 0) {
+                const emptyMsg = document.createElement('div');
+                emptyMsg.className = 'empty-state';
+                emptyMsg.style.padding = '20px';
+                emptyMsg.innerHTML = `
+                    <div style="font-size: 2rem; margin-bottom: 10px;">❓</div>
+                    <p>لا توجد أسئلة مضافة بعد</p>
+                `;
+                questionsList.appendChild(emptyMsg);
+                return;
+            }
+            
+            if(isHost){
+                Object.keys(questions).forEach(k=>{ 
+                    const q = questions[k]; 
+                    const div = document.createElement('div'); 
+                    div.className='item'; 
+                    
+                    const span = document.createElement('div'); 
+                    span.textContent = q.text; 
+                    span.style.flex = '1';
+                    
+                    const remove = document.createElement('button'); 
+                    remove.textContent='حذف'; 
+                    remove.className = 'small danger';
+                    remove.addEventListener('click', ()=>{ 
+                        if(useFirebase){ 
+                            ref('rooms/'+roomId+'/questions/'+encodeKey(k)).remove(); 
+                        } else { 
+                            delete localState.questions[k]; 
+                            writeLocal(); 
+                            renderLocal(); 
+                        }
+                        showNotification('🗑️ تم حذف السؤال', 'success');
+                    }); 
+                    
+                    div.appendChild(span); 
+                    div.appendChild(remove); 
+                    questionsList.appendChild(div); 
+                });
+            } else {
+                Object.keys(questions).forEach(k=>{ 
+                    const q=questions[k]; 
+                    const div=document.createElement('div'); 
+                    div.className='item'; 
+                    div.textContent = q.text; 
+                    questionsList.appendChild(div); 
                 });
             }
         }
@@ -1272,28 +1684,48 @@
 
         // التصويت
         function submitVote(itemKey){
-            let arr = localState.votes[playerName] || [];
-            if(arr.includes(itemKey)) {
-                arr = arr.filter(x=>x!==itemKey);
-                showNotification('🗳️ تم إلغاء التصويت', 'info');
-            } else { 
-                if(arr.length >= voteLimit){ 
-                    showNotification('❌ يمكنك التصويت حتى ' + voteLimit + ' عناصر فقط', 'error'); 
-                    return; 
-                } 
-                arr.push(itemKey); 
-                showNotification('✅ تم التصويت بنجاح!', 'success');
+            if(useFirebase){
+                const playerVoteRef = ref('rooms/'+roomId+'/votes/' + encodeKey(playerName));
+                playerVoteRef.once('value').then(snap=>{
+                    let arr = snap.val() || [];
+                    if(arr.includes(itemKey)){
+                        arr = arr.filter(x=>x!==itemKey);
+                        showNotification('🗳️ تم إلغاء التصويت', 'info');
+                    } else {
+                        if(arr.length >= voteLimit){ 
+                            showNotification('❌ يمكنك التصويت حتى ' + voteLimit + ' عناصر فقط', 'error'); 
+                            return; 
+                        }
+                        arr.push(itemKey);
+                        showNotification('✅ تم التصويت بنجاح!', 'success');
+                    }
+                    playerVoteRef.set(arr);
+                });
+            } else {
+                readLocal(); 
+                let arr = localState.votes[playerName] || [];
+                if(arr.includes(itemKey)) {
+                    arr = arr.filter(x=>x!==itemKey);
+                    showNotification('🗳️ تم إلغاء التصويت', 'info');
+                } else { 
+                    if(arr.length >= voteLimit){ 
+                        showNotification('❌ يمكنك التصويت حتى ' + voteLimit + ' عناصر فقط', 'error'); 
+                        return; 
+                    } 
+                    arr.push(itemKey); 
+                    showNotification('✅ تم التصويت بنجاح!', 'success');
+                }
+                localState.votes[playerName] = arr; 
+                writeLocal(); 
+                renderLocal();
             }
-            localState.votes[playerName] = arr; 
-            renderGame();
         }
 
         // المؤقت
-        function startTimer(){ 
+        function startTimer(endsAt){ 
             stopTimer(); 
             function tick(){ 
                 const now = Date.now();
-                const endsAt = localState.endsAt;
                 const rem = Math.max(0, Math.round((endsAt - now)/1000));
                 const total = (endsAt - (endsAt - (voteDurationInput.value * 1000))) / 1000;
                 const progress = ((total - rem) / total) * 100;
@@ -1325,9 +1757,19 @@
             } 
         }
 
+        function startLocalTimer(){ 
+            if(localState.endsAt) startTimer(localState.endsAt); 
+        }
+
         function onVotingEnd(){
-            localState.voting = false; 
-            renderGame(); 
+            if(useFirebase){ 
+                ref('rooms/'+roomId).update({ voting:false });
+            } else { 
+                readLocal(); 
+                localState.voting=false; 
+                writeLocal(); 
+                renderLocal(); 
+            }
             showNotification('⏰ انتهى وقت التصويت!', 'warning');
         }
 
